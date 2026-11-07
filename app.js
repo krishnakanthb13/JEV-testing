@@ -505,6 +505,19 @@ function applyBodyToForm(body) {
 
 let runToken = 0;
 
+function setResponseBusy(busy) {
+  $("responseCard").setAttribute("aria-busy", busy ? "true" : "false");
+  if (busy) {
+    $("answers").innerHTML =
+      '<div class="skeleton-answer">' +
+      '<span class="skeleton w30"></span><span class="skeleton w80"></span><span class="skeleton w65"></span>' +
+      "</div>" +
+      '<div class="skeleton-answer">' +
+      '<span class="skeleton w40"></span><span class="skeleton w75"></span>' +
+      "</div>";
+  }
+}
+
 async function run() {
   const token = ++runToken;
   clearError("jsonError");
@@ -547,12 +560,13 @@ async function run() {
   btn.textContent = "Running…";
   $("cancelRunBtn").hidden = false;
   runtime.abort = new AbortController();
+  setResponseBusy(true);
 
   const t0 = performance.now();
   const elapsed = () => ((performance.now() - t0) / 1000).toFixed(1);
-  $("responseMeta").innerHTML = '<span class="meta-chip">Sending request…</span>';
+  $("responseMeta").innerHTML = '<span class="meta-chip loading">Sending request…</span>';
   runtime.timer = setInterval(() => {
-    $("responseMeta").innerHTML = `<span class="meta-chip">Waiting for the API… ${elapsed()} s</span>`;
+    $("responseMeta").innerHTML = `<span class="meta-chip loading">Waiting for the API… ${elapsed()} s</span>`;
   }, 250);
 
   try {
@@ -586,6 +600,7 @@ async function run() {
   } catch (err) {
     const ms = Math.round(performance.now() - t0);
     if (err && err.name === "AbortError") {
+      setResponseBusy(false);
       $("responseMeta").innerHTML = `<span class="meta-chip bad">cancelled</span><span class="meta-chip">${ms} ms</span>`;
       $("answers").innerHTML = '<p class="empty">Request cancelled. Nothing was recorded in history.</p>';
       announce("Request cancelled.");
@@ -616,6 +631,8 @@ async function run() {
       error: String(err),
     });
     $("responseMeta").innerHTML = `<span class="meta-chip bad">request failed</span><span class="meta-chip">${ms} ms</span>`;
+    setResponseBusy(false);
+    $("answers").innerHTML = "";
     showRunFailure(String(err));
     $("rawResponse").textContent = JSON.stringify(body, null, 2);
     $("responseDetails").open = true;
@@ -625,6 +642,7 @@ async function run() {
       clearInterval(runtime.timer);
       runtime.timer = null;
       runtime.abort = null;
+      setResponseBusy(false);
       $("cancelRunBtn").hidden = true;
       btn.disabled = false;
       btn.textContent = "Run request";
@@ -705,6 +723,7 @@ async function showRunFailure(message) {
 }
 
 function renderResponse({ res, data, text, ms, body }) {
+  setResponseBusy(false);
   const meta = [];
   meta.push(`<span class="meta-chip ${res.ok ? "ok" : "bad"}">HTTP ${res.status}</span>`);
   meta.push(`<span class="meta-chip">${ms} ms</span>`);
@@ -741,6 +760,7 @@ function renderResponse({ res, data, text, ms, body }) {
       /* keep raw */
     }
     showError("responseError", `HTTP ${res.status}: the API rejected the request.\n${pretty}`);
+    $("answers").innerHTML = "";
     $("rawResponse").textContent = pretty;
     $("responseDetails").open = true;
     announce(`Request rejected with HTTP ${res.status}.`);
