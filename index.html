@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jev Test Console</title>
+  <meta name="description" content="Test harness for Jev, TypeSafe's System One model: noul, choice, score, and box questions against a state.">
+  <meta name="theme-color" content="#0b1120">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Jev">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">J</span>
+      <h1>Jev Test Console</h1>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Console sections">
+      <button class="tab active" id="tabBtn-playground" data-tab="playground" role="tab" aria-selected="true" aria-controls="tab-playground" data-tip="Build a request and run it against Jev.">Playground</button>
+      <button class="tab" id="tabBtn-history" data-tab="history" role="tab" aria-selected="false" aria-controls="tab-history" tabindex="-1" data-tip="Recorded runs, with side-by-side comparison.">History <span id="historyCount" class="pill" hidden></span></button>
+      <button class="tab" id="tabBtn-settings" data-tab="settings" role="tab" aria-selected="false" aria-controls="tab-settings" tabindex="-1" data-tip="API key, request options, and stored data.">Settings</button>
+    </div>
+    <div class="top-actions">
+      <span id="sessionChip" class="badge" hidden></span>
+      <span id="keyBadge" class="badge" data-tip="Whether an API key is saved in this browser. Set one in Settings.">API key: not set</span>
+      <button id="installBtn" class="ghost tiny" hidden data-tip="Install the console as an app with offline access to the shell.">Install app</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ================= PLAYGROUND ================= -->
+    <section id="tab-playground" class="tab-panel workspace" role="tabpanel" aria-labelledby="tabBtn-playground">
+      <div class="command-bar">
+        <label class="cmd-field cmd-wide">Endpoint
+          <select id="endpointSelect" data-tip="Where requests go. The OpenCode Console and TypeSafe API refuse direct browser (CORS) calls, so use a Local proxy endpoint (run node proxy.js first) or your own proxy URL.">
+            <option value="proxy_opencode">Local proxy for OpenCode Console: localhost:8787 (run node proxy.js)</option>
+            <option value="proxy_typesafe">Local proxy for TypeSafe API: localhost:8787 (run node proxy.js)</option>
+            <option value="opencode">OpenCode Console direct: opencode.ai/inference/systemone/v1/systemone (blocked by CORS in browsers)</option>
+            <option value="typesafe">TypeSafe API direct: api.typesafe.ai/v1/systemone (blocked by CORS in browsers)</option>
+            <option value="custom">Custom URL&hellip;</option>
+          </select>
+        </label>
+        <div id="customEndpointRow" class="cmd-field cmd-wide" hidden>
+          <label>Custom endpoint URL
+            <input id="customEndpointInput" placeholder="https://example.com/v1/systemone" spellcheck="false" autocomplete="off" data-tip="Any endpoint that speaks the System One request and response format.">
+          </label>
+        </div>
+        <label class="cmd-field">Model
+          <input id="modelInput" list="modelOptions" spellcheck="false" autocomplete="off" data-tip="Jev model id. jev-1.13-free is free on OpenCode Console, jev-1.13 is paid, and Box questions need Jev 1.14 or newer.">
+          <datalist id="modelOptions">
+            <option value="jev-1.13-free"></option>
+            <option value="jev-1.13"></option>
+            <option value="jev-latest"></option>
+            <option value="jev-1.14"></option>
+          </datalist>
+        </label>
+        <div class="cmd-actions">
+          <button id="runBtn" class="primary" data-tip="Send the state and questions to Jev. Every question is evaluated in parallel against the same state. Shortcut: Ctrl+Enter.">Run request</button>
+          <button id="cancelRunBtn" class="ghost" hidden data-tip="Abort the in-flight request. Cancelled runs are not recorded in history. Shortcut: Esc.">Cancel</button>
+          <button id="jsonToggleBtn" class="ghost" aria-pressed="false" data-tip="Show and edit the exact JSON body that gets sent. Going back re-reads it into the form.">Request JSON</button>
+          <button id="curlBtn" class="ghost" data-tip="Copy the request as a cURL command for a terminal. The copied command contains your API key.">cURL</button>
+          <button id="fetchBtn" class="ghost" data-tip="Copy the request as a fetch() snippet for a browser or Node client. The copied code contains your API key.">fetch()</button>
+          <button id="fetchModelsBtn" class="ghost" data-tip="Fetch GET /inference/v1/models from OpenCode Console and show the raw model list.">List models</button>
+        </div>
+        <p id="modelNote" class="hint cmd-note"></p>
+      </div>
+
+      <div class="pane pane-request">
+        <div class="card">
+          <div class="card-head">
+            <h2>State</h2>
+            <div class="row">
+              <div class="seg" role="group" aria-label="State format">
+                <button data-state-mode="text" class="seg-btn active" aria-pressed="true" data-tip="Send the state as a plain string.">Text</button>
+                <button data-state-mode="json" class="seg-btn" aria-pressed="false" data-tip="Send the state as a JSON object. Questions can point at parts of it with backtick field paths like `ticket.messages[0].text`.">JSON</button>
+              </div>
+              <label class="ghost btn tiny" data-tip="Attach a PNG or JPEG, sent as a base64 asset. Reference it as `img-1` in the state or instructions. Box questions need an image.">Attach image<input id="imageInput" type="file" accept="image/png,image/jpeg" hidden></label>
+            </div>
+          </div>
+          <textarea id="stateInput" rows="4" placeholder="The content to evaluate&hellip;" spellcheck="false"></textarea>
+          <div class="row wrap">
+            <div id="assetChip" class="chip" hidden>
+              <img id="assetThumb" alt="Preview of the attached image">
+              <code id="assetRef"></code>
+              <button id="insertAssetBtn" class="ghost tiny" data-tip="Insert the reference `img-1` at the cursor in the state.">Insert into state</button>
+              <button id="removeAssetBtn" class="ghost tiny" data-tip="Detach the image. It will not be sent with the request.">Remove</button>
+            </div>
+            <div class="sample-row">
+              <span class="hint">Samples:</span>
+              <button class="chip-btn sample-state" data-sample="ticket" data-tip="A support ticket about failing payments, from the TypeSafe quickstart.">Support ticket</button>
+              <button class="chip-btn sample-state" data-sample="repeat" data-tip="A message showing repeat contact, for noul criteria examples.">Repeat contact</button>
+              <button class="chip-btn sample-state" data-sample="json" data-tip="A structured state with ticket, order, and policy fields, for field-path questions.">JSON state</button>
+            </div>
+          </div>
+          <p id="stateError" class="error" hidden></p>
+        </div>
+
+        <div class="card">
+          <div class="preset-bar">
+            <label class="preset-select-label">Preset
+              <select id="presetSelect" data-tip="Load an example request or a saved preset into the form."></select>
+            </label>
+            <button id="savePresetBtn" class="ghost" data-tip="Save the current state, questions, and model to this browser. Attached images are not stored.">Save as preset</button>
+            <button id="deletePresetBtn" class="ghost" disabled data-tip="Delete the selected saved preset from this browser.">Delete</button>
+            <button id="exportPresetsBtn" class="ghost" data-tip="Download all saved presets as jev-presets.json.">Export</button>
+            <label class="ghost btn" data-tip="Import presets from a jev-presets.json file. Same-name presets are replaced.">Import<input id="importPresetsInput" type="file" accept="application/json,.json" hidden></label>
+          </div>
+          <div id="savePresetRow" class="save-row" hidden>
+            <label class="preset-name-label">Preset name
+              <input id="presetNameInput" placeholder="e.g. Refund triage v2" autocomplete="off">
+            </label>
+            <button id="savePresetConfirm" class="primary">Save preset</button>
+            <button id="savePresetCancel" class="ghost">Cancel</button>
+          </div>
+          <p id="presetStatus" class="hint" hidden></p>
+          <div id="questionList"></div>
+          <div class="row wrap add-row">
+            <button class="chip-btn add-q" data-type="noul" data-tip="Yes/no question. Returns the probability the statement is true, 0 to 1.">+ Noul</button>
+            <button class="chip-btn add-q" data-type="choice" data-tip="Pick one option from a list. Returns the choice, probabilities for every option, and confidence.">+ Choice</button>
+            <button class="chip-btn add-q" data-type="score" data-tip="Rate along ordered levels. Returns a position, the level legend, probabilities, and confidence.">+ Score</button>
+            <button class="chip-btn add-q" data-type="box" data-tip="Locate a target in an image. Returns box edges and confidence. Needs Jev 1.14 or newer and an attached image.">+ Box</button>
+            <span class="hint">Ctrl+Enter runs, Esc cancels</span>
+          </div>
+          <p id="questionsError" class="error" hidden></p>
+        </div>
+
+        <div id="jsonEditor" class="card" hidden>
+          <p class="hint">This is the exact body that will be sent. Edits here are used as-is. Going back re-reads this JSON into the form.</p>
+          <textarea id="requestJson" rows="10" spellcheck="false"></textarea>
+          <p id="jsonError" class="error" hidden></p>
+        </div>
+      </div>
+
+      <div class="pane pane-response">
+        <div id="modelsPanel" class="card" hidden>
+          <div class="row between">
+            <strong>GET /inference/v1/models</strong>
+            <button id="closeModelsBtn" class="ghost tiny">Close</button>
+          </div>
+          <pre id="modelsOut"></pre>
+        </div>
+
+        <div class="card" id="responseCard">
+          <div class="card-head">
+            <h2>Response</h2>
+            <div id="responseMeta" class="row wrap"></div>
+          </div>
+          <div class="row wrap resp-actions">
+            <button id="copyResponseBtn" class="ghost tiny" disabled data-tip="Copy the response JSON to the clipboard.">Copy JSON</button>
+            <button id="downloadResponseBtn" class="ghost tiny" disabled data-tip="Download the response as jev-response.json.">Download JSON</button>
+          </div>
+          <p id="responseError" class="error" hidden></p>
+          <div id="answers">
+            <p class="empty">Run a request to see typed answers here. Each question comes back as a value, a probability distribution, and where supported, a confidence score.</p>
+          </div>
+          <details id="responseDetails">
+            <summary>Raw response</summary>
+            <pre id="rawResponse"></pre>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= HISTORY ================= -->
+    <section id="tab-history" class="tab-panel scroll-panel" role="tabpanel" aria-labelledby="tabBtn-history" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>History</h2>
+          <button id="clearHistoryBtn" class="ghost" data-tip="Remove all recorded runs from this browser.">Clear history</button>
+        </div>
+        <p class="hint">Select two runs to compare their answers side by side.</p>
+        <div id="comparePanel" class="compare-panel" hidden>
+          <div class="row between">
+            <h3>Run comparison</h3>
+            <button id="clearCompareBtn" class="ghost tiny" data-tip="Deselect both runs and close the comparison.">Clear comparison</button>
+          </div>
+          <div id="compareTable"></div>
+        </div>
+        <div id="historyList"></div>
+      </div>
+    </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <section id="tab-settings" class="tab-panel scroll-panel" role="tabpanel" aria-labelledby="tabBtn-settings" hidden>
+      <div class="card">
+        <h2>API access</h2>
+        <label>API key
+          <div class="row">
+            <input id="apiKeyInput" type="password" placeholder="OpenCode Console or TypeSafe API key" autocomplete="off" spellcheck="false">
+            <button id="toggleKeyBtn" class="ghost" data-tip="Show or hide the API key.">Show</button>
+          </div>
+        </label>
+        <p class="hint">Saved to this browser&rsquo;s localStorage and sent only to the endpoint you choose. Clearing site data removes it.</p>
+        <p id="keyStatus" class="hint"></p>
+      </div>
+
+      <div class="card">
+        <h2>Requests</h2>
+        <label>Images header <code>TypeSafe-Danger-Zone-Images</code>
+          <select id="imagesHeaderSelect" data-tip="Images and Box questions are off by default on the API. This controls the header that turns them on.">
+            <option value="auto">Auto: send when an image or Box question is present</option>
+            <option value="always">Always send</option>
+            <option value="never">Never send</option>
+          </select>
+        </label>
+        <p class="hint">Images and Box questions are off by default on the API; the header turns them on. Auto sends it only when needed.</p>
+      </div>
+
+      <div class="card">
+        <h2>App</h2>
+        <p id="swStatus" class="hint"></p>
+        <div class="row wrap">
+          <button id="clearDataBtn" class="danger" data-tip="Remove the API key, settings, history, and saved presets from localStorage on this device.">Clear all stored data</button>
+        </div>
+        <p class="hint">The API key, settings, history, and saved presets live in localStorage on this device only. Export presets before clearing if you want to keep them.</p>
+        <p class="hint">
+          Request and question shapes from the
+          <a href="https://opencode.ai/docs/console/models/" target="_blank" rel="noopener">OpenCode Console models</a>
+          and
+          <a href="https://docs.typesafe.ai/introduction" target="_blank" rel="noopener">TypeSafe documentation</a>.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <div id="liveRegion" role="status" class="sr-only"></div>
+  <script src="app.js"></script>
+</body>
+</html>

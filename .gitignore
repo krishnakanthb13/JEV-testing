@@ -1,0 +1,2 @@
+# Process id files written by proxy.js and serve.js
+.jev-*.pid
