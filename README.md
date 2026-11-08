@@ -159,7 +159,8 @@ noul checklist, JSON field paths, box) and your saved presets.
 - **Copy JSON** and **Download JSON** (`jev-response.json`) capture the raw response.
 - **History** stores the last 25 runs in localStorage. **Open** reloads a run into the
   form; ticking **Compare** on two runs shows a table of answers side by side with
-  numeric deltas and latency.
+  numeric deltas and latency. **Export JSON** downloads the full history, and
+  **Export CSV** downloads a spreadsheet-friendly summary of every run.
 
 ### Cost estimate
 

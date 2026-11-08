@@ -256,6 +256,13 @@ function buildHeaders(body) {
 
 /* ---------------- question model ---------------- */
 
+const QUESTION_TYPES = {
+  noul: { label: "Noul", hint: "Yes / no probability" },
+  choice: { label: "Choice", hint: "Pick one option" },
+  score: { label: "Score", hint: "Rate along ordered levels" },
+  box: { label: "Box", hint: "Locate a target in an image" },
+};
+
 function newQuestion(type) {
   return {
     id: "",
@@ -272,13 +279,40 @@ function newQuestion(type) {
 }
 
 function renderQuestions() {
-  $("questionList").innerHTML = runtime.questions.map(questionHtml).join("");
+  if (!runtime.questions.length) {
+    $("questionList").innerHTML =
+      '<p class="empty">No questions yet. Add a Noul, Choice, Score, or Box question below.</p>';
+  } else {
+    $("questionList").innerHTML = runtime.questions.map(questionHtml).join("");
+  }
   updateModelNote();
 }
 
+function nextQuestionId() {
+  const used = new Set(runtime.questions.map((question) => question.id.trim()));
+  let n = runtime.questions.length + 1;
+  while (used.has("q" + n)) n += 1;
+  return "q" + n;
+}
+
+function focusQuestion(index) {
+  const card = $("questionList").querySelector(`.question[data-i="${index}"]`);
+  if (!card) return;
+  card.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  const input = card.querySelector?.('[data-field="id"]');
+  if (input) {
+    input.focus();
+    input.select();
+  }
+}
+
 function questionHtml(question, i) {
-  const typeOptions = ["noul", "choice", "score", "box"]
-    .map((t) => `<option value="${t}"${t === question.type ? " selected" : ""}>${t}</option>`)
+  const meta = QUESTION_TYPES[question.type] || { label: question.type || "Question", hint: "" };
+  const typeOptions = Object.keys(QUESTION_TYPES)
+    .map(
+      (t) =>
+        `<option value="${t}"${t === question.type ? " selected" : ""}>${QUESTION_TYPES[t].label.toLowerCase()}</option>`
+    )
     .join("");
 
   let crit = "";
@@ -323,11 +357,18 @@ function questionHtml(question, i) {
 
   return `
     <div class="question q-type-${question.type}" data-i="${i}">
+      <div class="q-title">
+        <span class="type-tag">${esc(meta.label)}</span>
+        <span class="q-title-hint">${esc(meta.hint)}</span>
+        <span class="q-title-actions">
+          <button class="ghost tiny" data-action="duplicate-q" data-i="${i}" data-tip="Duplicate this question with the same settings.">Duplicate</button>
+          <button class="ghost tiny" data-action="remove-q" data-i="${i}" data-tip="Remove this question from the request.">Remove</button>
+        </span>
+      </div>
       <div class="q-head">
         <label>Question ID<input data-field="id" data-i="${i}" value="${esc(question.id)}" placeholder="is_urgent" spellcheck="false"></label>
         <label>Type<select data-field="type" data-i="${i}">${typeOptions}</select></label>
         <label>Instructions<textarea data-field="instructions" data-i="${i}" rows="2" placeholder="The judgment to make about the state (text or JSON)">${esc(question.instructions)}</textarea></label>
-        <button class="ghost tiny" data-action="remove-q" data-i="${i}">Remove</button>
       </div>
       <div class="q-body">${crit}</div>
     </div>`;
@@ -951,6 +992,9 @@ function renderHistory() {
   const count = $("historyCount");
   count.textContent = items.length;
   count.hidden = items.length === 0;
+  $("clearHistoryBtn").disabled = items.length === 0;
+  $("exportHistoryJsonBtn").disabled = items.length === 0;
+  $("exportHistoryCsvBtn").disabled = items.length === 0;
 
   if (!items.length) {
     $("historyList").innerHTML = '<p class="empty">No runs yet. Requests you send are listed here with their answers, ready to reopen or compare.</p>';
@@ -961,15 +1005,21 @@ function renderHistory() {
   $("historyList").innerHTML = items
     .map((item) => {
       const questions = (item.request && item.request.questions) || {};
-      const summary = Object.entries(questions)
+      const questionText = Object.entries(questions)
         .map(([id, question]) => `${id} (${question && question.type ? question.type : "?"})`)
         .join(", ");
+      const answers =
+        (item.response && typeof item.response === "object" && item.response.answers) || {};
+      const answerText = Object.entries(answers)
+        .map(([id, answer]) => `${id}: ${answerSummary(answer).text}`)
+        .join(", ");
+      const summary = answerText || questionText || "(no questions)";
       const checked = runtime.compare.includes(item.ts) ? " checked" : "";
       return `
         <div class="history-item">
           <span class="meta-chip ${item.ok ? "ok" : "bad"}">${item.status || "failed"}</span>
           <div>
-            <div class="summary">${esc(summary || "(no questions)")}</div>
+            <div class="summary" title="${esc(summary)}">${esc(summary)}</div>
             <div class="meta">${new Date(item.ts).toLocaleString()} · ${esc(item.model || "")} · ${item.ms} ms</div>
           </div>
           <label class="compare-check"><input type="checkbox" data-action="history-compare" data-ts="${item.ts}"${checked}> Compare</label>
@@ -1373,6 +1423,7 @@ function renderPresetOptions(selected) {
   if (selected) $("presetSelect").value = selected;
   const isSaved = String($("presetSelect").value || "").startsWith("saved::");
   $("deletePresetBtn").disabled = !isSaved;
+  $("exportPresetsBtn").disabled = saved.length === 0;
 }
 
 function openSaveForm() {
@@ -1453,6 +1504,68 @@ function exportPresets() {
   downloadFile("jev-presets.json", JSON.stringify(payload, null, 2));
   setPresetStatus(`Exported ${list.length} preset${list.length === 1 ? "" : "s"} as jev-presets.json.`);
   announce("Presets exported.");
+}
+
+function setHistoryStatus(message) {
+  const el = $("historyStatus");
+  el.textContent = message;
+  el.hidden = !message;
+}
+
+function exportHistoryJson() {
+  const items = loadHistory();
+  if (!items.length) {
+    setHistoryStatus("No history to export yet. Run a request first.");
+    return;
+  }
+  const payload = {
+    app: "jev-test-console",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    history: items,
+  };
+  downloadFile("jev-history.json", JSON.stringify(payload, null, 2));
+  setHistoryStatus(`Exported ${items.length} run${items.length === 1 ? "" : "s"} as jev-history.json.`);
+  announce("History exported as JSON.");
+}
+
+function csvField(value) {
+  const text = value == null ? "" : String(value);
+  return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+}
+
+function exportHistoryCsv() {
+  const items = loadHistory();
+  if (!items.length) {
+    setHistoryStatus("No history to export yet. Run a request first.");
+    return;
+  }
+  const header = ["timestamp", "status", "ok", "model", "endpoint", "ms", "questions", "answers"];
+  const rows = items.map((item) => {
+    const questions = (item.request && item.request.questions) || {};
+    const questionText = Object.entries(questions)
+      .map(([id, question]) => `${id} (${question && question.type ? question.type : "?"})`)
+      .join("; ");
+    const answers =
+      (item.response && typeof item.response === "object" && item.response.answers) || {};
+    const answerText = Object.entries(answers)
+      .map(([id, answer]) => `${id}: ${answerSummary(answer).text}`)
+      .join("; ");
+    return [
+      new Date(item.ts).toISOString(),
+      item.status || "failed",
+      item.ok ? "yes" : "no",
+      item.model || "",
+      item.endpoint || "",
+      item.ms == null ? "" : item.ms,
+      questionText,
+      answerText,
+    ];
+  });
+  const csv = [header, ...rows].map((row) => row.map(csvField).join(",")).join("\r\n");
+  downloadFile("jev-history.csv", csv, "text/csv;charset=utf-8");
+  setHistoryStatus(`Exported ${items.length} run${items.length === 1 ? "" : "s"} as jev-history.csv.`);
+  announce("History exported as CSV.");
 }
 
 function normalizeImported(data) {
@@ -1778,9 +1891,10 @@ function bindEvents() {
   document.querySelectorAll(".add-q").forEach((btn) => {
     btn.addEventListener("click", () => {
       const item = newQuestion(btn.dataset.type);
-      item.id = "q" + (runtime.questions.length + 1);
+      item.id = nextQuestionId();
       runtime.questions.push(item);
       renderQuestions();
+      focusQuestion(runtime.questions.length - 1);
     });
   });
 
@@ -1831,7 +1945,16 @@ function bindEvents() {
     const i = Number(btn.dataset.i);
     const j = Number(btn.dataset.j);
     const question = runtime.questions[i];
+    if (!question) return;
     switch (btn.dataset.action) {
+      case "duplicate-q": {
+        const copy = JSON.parse(JSON.stringify(question));
+        copy.id = nextQuestionId();
+        runtime.questions.splice(i + 1, 0, copy);
+        renderQuestions();
+        focusQuestion(i + 1);
+        break;
+      }
       case "remove-q":
         runtime.questions.splice(i, 1);
         renderQuestions();
@@ -1874,7 +1997,7 @@ function bindEvents() {
       announce("Response JSON copied to the clipboard.");
       const btn = $("copyResponseBtn");
       btn.textContent = "Copied";
-      setTimeout(() => (btn.textContent = "Copy response JSON"), 2000);
+      setTimeout(() => (btn.textContent = "Copy JSON"), 2000);
     } catch {
       showError("responseError", "Clipboard copy failed. The raw response is under Raw response below.");
     }
@@ -1887,10 +2010,14 @@ function bindEvents() {
   $("fetchModelsBtn").addEventListener("click", fetchModels);
   $("closeModelsBtn").addEventListener("click", () => ($("modelsPanel").hidden = true));
 
+  $("exportHistoryJsonBtn").addEventListener("click", exportHistoryJson);
+  $("exportHistoryCsvBtn").addEventListener("click", exportHistoryCsv);
+
   $("clearHistoryBtn").addEventListener("click", () => {
     if (confirm("Clear the request history on this device?")) {
       runtime.compare = [];
       saveHistory([]);
+      setHistoryStatus("History cleared.");
       announce("History cleared.");
     }
   });
@@ -1950,6 +2077,7 @@ function bindEvents() {
     renderHistory();
     updateKeyBadge();
     setPresetStatus("");
+    setHistoryStatus("");
     announce("All stored data cleared.");
   });
 

@@ -178,9 +178,14 @@
       <div class="card">
         <div class="card-head">
           <h2>History</h2>
-          <button id="clearHistoryBtn" class="ghost" data-tip="Remove all recorded runs from this browser.">Clear history</button>
+          <div class="row wrap">
+            <button id="exportHistoryJsonBtn" class="ghost" disabled data-tip="Download all recorded runs as jev-history.json.">Export JSON</button>
+            <button id="exportHistoryCsvBtn" class="ghost" disabled data-tip="Download a spreadsheet-friendly summary of all recorded runs.">Export CSV</button>
+            <button id="clearHistoryBtn" class="ghost" disabled data-tip="Remove all recorded runs from this browser.">Clear history</button>
+          </div>
         </div>
         <p class="hint">Select two runs to compare their answers side by side.</p>
+        <p id="historyStatus" class="hint" hidden></p>
         <div id="comparePanel" class="compare-panel" hidden>
           <div class="row between">
             <h3>Run comparison</h3>

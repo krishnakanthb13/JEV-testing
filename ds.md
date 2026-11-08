@@ -115,9 +115,18 @@ All items below were implemented and verified with the test harnesses in the ses
 - [x] Make `stop.js` cross-platform (Linux via `/proc`, macOS via `ps`)
 - [ ] API key storage remains in `localStorage` as a documented trade-off.
 
+## Follow-up UI/UX changes
+
+- Question cards now show a colour-coded type tag (Noul, Choice, Score, Box) matching the answer cards, plus a one-line description and a type-coloured left border.
+- Each question has **Duplicate** and **Remove** actions in its header. New questions get a collision-free ID and focus automatically, and the list shows a helpful empty state.
+- History rows now show an answer summary (falling back to question names when a run failed), with the full summary on hover.
+- Added History export: **Export JSON** downloads `jev-history.json` with every recorded run, and **Export CSV** downloads `jev-history.csv` with a spreadsheet-friendly summary. Export and clear buttons disable when history is empty.
+- Preset **Export** now disables when there are no saved presets.
+- Fixed the **Copy JSON** button label resetting to the wrong text.
+
 ## Test results
 
-- `app.js` logic and concurrency: 17 passed, 0 failed
+- `app.js` logic, concurrency, question cards, and history export: 23 passed, 0 failed
 - `serve.js` integration: 8 passed, 0 failed
 - `proxy.js` integration: 6 passed, 0 failed
 - `sw.js` behavior: 8 passed, 0 failed

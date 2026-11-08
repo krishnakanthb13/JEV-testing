@@ -629,15 +629,43 @@ button,
 
 .question {
   border: 1px solid var(--border);
+  border-left: 3px solid var(--type-color, var(--border));
   border-radius: 9px;
   background: var(--panel-2);
   padding: 9px;
   margin-top: 8px;
 }
 
+.question .q-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.question .q-title .type-tag {
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: color-mix(in srgb, var(--type-color, transparent) 12%, transparent);
+}
+
+.question .q-title-hint {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.question .q-title-actions {
+  display: flex;
+  gap: 4px;
+}
+
 .question .q-head {
   display: grid;
-  grid-template-columns: 120px 110px 1fr auto;
+  grid-template-columns: 120px 110px 1fr;
   gap: 6px;
   align-items: end;
 }

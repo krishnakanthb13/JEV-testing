@@ -1,4 +1,4 @@
-const CACHE = "jev-console-v5";
+const CACHE = "jev-console-v6";
 
 const ASSETS = [
   "./",
