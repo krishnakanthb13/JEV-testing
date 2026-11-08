@@ -67,8 +67,8 @@ headers so the page can read the response. Any other path returns 404, so it is 
 open proxy.
 
 If the proxy is running and you still use a direct endpoint, the app switches to the
-local proxy and retries automatically. If the proxy is not running, use **Copy as cURL**
-and run the request in a terminal instead.
+local proxy and retries automatically. If the proxy is not running, use the **cURL**
+button and run the request in a terminal instead.
 
 ## Using the console
 
@@ -121,8 +121,19 @@ Notes from the API docs:
 
 ### Presets
 
-The preset dropdown contains built-in examples (support triage, speculative fan-out,
-noul checklist, JSON field paths, box) and your saved presets.
+The preset dropdown groups built-in examples into single types, combinations, structured
+data, and worked examples, plus your saved presets:
+
+- **Single types**: noul, choice, score, and box.
+- **Combinations**: noul + choice, noul + score, noul + box, choice + score,
+  choice + box, score + box, and all four types together.
+- **Structured data**: JSON state with field paths (nouls), JSON state with choice +
+  score + noul, and structured JSON instructions.
+- **Worked examples**: support triage (choice + score + noul), speculative fan-out
+  (5 choices), noul checklist, and multi-label noul checklist.
+
+Box examples need an attached image and Jev 1.14 or newer. Other examples use either a
+plain text state or a structured JSON state.
 
 - **Save as preset** stores the current model, state, and questions in localStorage.
   Attached images are not stored in presets.
@@ -222,6 +233,7 @@ select.
 | `stop.bat` | Windows wrapper for `stop.js` |
 | `stop.js` | Stops the servers tracked by the pid files and removes them |
 | `.gitignore` | Ignores the `.jev-*.pid` runtime files |
+| `ds.md` | Code audit, completed fix checklist, and follow-up UI/UX notes |
 | `README.md` | This file |
 
 ## PWA
@@ -236,7 +248,7 @@ interface seems stale after an update, do one hard reload (`Ctrl+Shift+R`).
 **`TypeError: Failed to fetch`**
 Both APIs block direct browser calls. Start the proxy (`node proxy.js` or `start.bat`) and
 select a **Local proxy** endpoint. If the proxy is already running, the app switches and
-retries by itself. As a last resort, use **Copy as cURL**.
+retries by itself. As a last resort, use the **cURL** button.
 
 **`HTTP 401` with `authentication_error`**
 The API key is missing or invalid. Set it in Settings. The key must match the endpoint:

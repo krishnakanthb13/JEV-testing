@@ -91,6 +91,10 @@ Overall the code is well-structured, but several real bugs and integrity issues 
 6. **Add a CSP** and consider subresource integrity for a shipped PWA.
 7. **Cross-platform `stop.js`** would help non-Windows users; currently it only works on Windows.
 
+Status: items 3–7 were implemented in the follow-up. Item 1 is covered by targeted
+validation in `validateForm`, `applyBodyToForm`, and `attachImage` rather than a separate
+module. Item 2 is covered by the abort/token guard in `run()`.
+
 ## Implementation checklist
 
 All items below were implemented and verified with the test harnesses in the session scratchpad.
@@ -123,10 +127,15 @@ All items below were implemented and verified with the test harnesses in the ses
 - Added History export: **Export JSON** downloads `jev-history.json` with every recorded run, and **Export CSV** downloads `jev-history.csv` with a spreadsheet-friendly summary. Export and clear buttons disable when history is empty.
 - Preset **Export** now disables when there are no saved presets.
 - Fixed the **Copy JSON** button label resetting to the wrong text.
+- Expanded the built-in preset library to 18 examples covering every single question type,
+  all six type pairs, JSON instructions, JSON field paths, multi-label nouls, and an
+  all-four-types preset. The dropdown groups them into single types, combinations,
+  structured data, and worked examples. Added `review` and `incident` sample states, and
+  automated tests validate every preset, its built request body, and its dropdown group.
 
 ## Test results
 
-- `app.js` logic, concurrency, question cards, and history export: 23 passed, 0 failed
+- `app.js` logic, concurrency, question cards, history export, and all 18 presets: 25 passed, 0 failed
 - `serve.js` integration: 8 passed, 0 failed
 - `proxy.js` integration: 6 passed, 0 failed
 - `sw.js` behavior: 8 passed, 0 failed

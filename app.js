@@ -1249,6 +1249,10 @@ const SAMPLE_STATES = {
   ticket:
     "Our API integration started returning 500 errors on every request about 20 minutes ago, and we can't process any customer orders until this is fixed.",
   repeat: "I have asked three times now. Can I please just talk to a real person?",
+  review:
+    "The headphones sound great and arrived a day early, but the carrying case was missing from the box. I would still recommend them.",
+  incident:
+    "Checkout is returning 502 errors for about 30% of EU customers. We rolled back the last deploy and errors are dropping, but order volume is still down.",
   json: {
     ticket: {
       subject: "Duplicate charge",
@@ -1386,15 +1390,254 @@ const PRESETS = {
       q("mug", "box", "the coffee mug in `photo`"),
     ];
   },
+  noul_single() {
+    runtime.stateMode = "text";
+    $("stateInput").value = SAMPLE_STATES.ticket;
+    runtime.questions = [
+      q("is_urgent", "noul", "The message conveys urgency or time-sensitivity", {
+        critTrue: "Mentions an outage, blocked work, a deadline, or customers affected",
+        critFalse: "A general question or feature request with no time pressure",
+      }),
+    ];
+  },
+  choice_single() {
+    runtime.stateMode = "text";
+    $("stateInput").value = SAMPLE_STATES.ticket;
+    runtime.questions = [
+      q("sentiment", "choice", "What is the customer's overall sentiment?", {
+        rows: [
+          { name: "positive", desc: "Satisfied or appreciative" },
+          { name: "neutral", desc: "Matter-of-fact, no strong feeling" },
+          { name: "negative", desc: "Frustrated, disappointed, or angry" },
+          { name: "mixed", desc: "Both positive and negative points" },
+        ],
+      }),
+    ];
+  },
+  score_single() {
+    runtime.stateMode = "text";
+    $("stateInput").value = SAMPLE_STATES.ticket;
+    runtime.questions = [
+      q("urgency_score", "score", "How time-sensitive is this request?", {
+        levels: [
+          "No time pressure, can wait indefinitely",
+          "Low urgency, should be handled this week",
+          "Moderate urgency, impacts work but has a workaround",
+          "High urgency, blocks important work",
+          "Critical, production outage or safety risk",
+        ],
+      }),
+    ];
+  },
+  box_single() {
+    runtime.stateMode = "json";
+    $("stateInput").value = JSON.stringify({ photo: runtime.asset ? runtime.asset.ref : ASSET_REF }, null, 2);
+    runtime.questions = [q("target", "box", "Locate the main object in `photo`")];
+  },
+  noul_choice() {
+    runtime.stateMode = "text";
+    $("stateInput").value = SAMPLE_STATES.repeat;
+    runtime.questions = [
+      q("is_human_escalation", "noul", "Is the customer asking for a human agent?"),
+      q("request_type", "choice", "What is the customer asking for?", {
+        rows: [
+          { name: "human_agent", desc: "Talk to a person" },
+          { name: "status_update", desc: "An update on an existing issue" },
+          { name: "new_issue", desc: "Report a new problem" },
+          { name: "other", desc: "Something else" },
+        ],
+      }),
+    ];
+  },
+  noul_score() {
+    runtime.stateMode = "text";
+    $("stateInput").value = SAMPLE_STATES.incident;
+    runtime.questions = [
+      q("is_production", "noul", "Does this affect production traffic?"),
+      q("severity", "score", "How severe is the incident?", {
+        levels: [
+          "Cosmetic",
+          "Minor degradation",
+          "Partial outage",
+          "Major outage",
+          "Full outage or data loss",
+        ],
+      }),
+    ];
+  },
+  choice_score() {
+    runtime.stateMode = "text";
+    $("stateInput").value = SAMPLE_STATES.review;
+    runtime.questions = [
+      q("topic", "choice", "What is the review mainly about?", {
+        rows: [
+          { name: "sound", desc: "Audio quality" },
+          { name: "comfort", desc: "Fit and comfort" },
+          { name: "shipping", desc: "Delivery or packaging" },
+          { name: "value", desc: "Price for what you get" },
+          { name: "other", desc: "None of the above" },
+        ],
+      }),
+      q("rating", "score", "What rating does the review imply?", {
+        levels: ["1 star", "2 stars", "3 stars", "4 stars", "5 stars"],
+      }),
+    ];
+  },
+  choice_box() {
+    runtime.stateMode = "json";
+    $("stateInput").value = JSON.stringify({ photo: runtime.asset ? runtime.asset.ref : ASSET_REF }, null, 2);
+    runtime.questions = [
+      q("scene", "choice", "What best describes `photo`?", {
+        rows: [
+          { name: "desk", desc: "A desk or workspace" },
+          { name: "kitchen", desc: "A kitchen or dining area" },
+          { name: "product", desc: "A product shot on a plain background" },
+          { name: "other", desc: "None of the above" },
+        ],
+      }),
+      q("target", "box", "the main object in `photo`"),
+    ];
+  },
+  score_box() {
+    runtime.stateMode = "json";
+    $("stateInput").value = JSON.stringify({ photo: runtime.asset ? runtime.asset.ref : ASSET_REF }, null, 2);
+    runtime.questions = [
+      q("clutter", "score", "How cluttered is the scene in `photo`?", {
+        levels: ["Empty", "Tidy", "A few items", "Busy", "Very cluttered"],
+      }),
+      q("target", "box", "the most prominent object in `photo`"),
+    ];
+  },
+  all_types() {
+    runtime.stateMode = "json";
+    $("stateInput").value = JSON.stringify(
+      { photo: runtime.asset ? runtime.asset.ref : ASSET_REF, note: "A product photo with a mug and a notebook." },
+      null,
+      2
+    );
+    runtime.questions = [
+      q("mug_visible", "noul", "Is there a coffee mug in `photo`?"),
+      q("scene", "choice", "What best describes `photo`?", {
+        rows: [
+          { name: "desk", desc: "A desk or workspace" },
+          { name: "kitchen", desc: "A kitchen or dining area" },
+          { name: "product", desc: "A product shot on a plain background" },
+          { name: "other", desc: "None of the above" },
+        ],
+      }),
+      q("clutter", "score", "How cluttered is the scene?", {
+        levels: ["Empty", "Tidy", "A few items", "Busy", "Very cluttered"],
+      }),
+      q("mug", "box", "the coffee mug in `photo`"),
+    ];
+  },
+  json_instructions() {
+    runtime.stateMode = "json";
+    $("stateInput").value = JSON.stringify(SAMPLE_STATES.json, null, 2);
+    runtime.questions = [
+      q(
+        "refund_decision",
+        "choice",
+        JSON.stringify({
+          task: "Decide whether the refund should be approved",
+          labels: ["approve", "deny", "needs_review"],
+        }),
+        {
+          rows: [
+            { name: "approve", desc: "The policy and order support a refund" },
+            { name: "deny", desc: "The request does not meet the policy" },
+            { name: "needs_review", desc: "Missing or conflicting information" },
+          ],
+        }
+      ),
+      q(
+        "duplicate_charge",
+        "noul",
+        JSON.stringify({
+          task: "Check whether the order shows a duplicate charge",
+          focus: "order.charges",
+        })
+      ),
+    ];
+  },
+  json_mixed() {
+    runtime.stateMode = "json";
+    $("stateInput").value = JSON.stringify(SAMPLE_STATES.json, null, 2);
+    runtime.questions = [
+      q("department", "choice", "Which team should handle `ticket`?", {
+        rows: [
+          { name: "billing", desc: "Charges, refunds, invoices" },
+          { name: "technical", desc: "Bugs and integration issues" },
+          { name: "account", desc: "Login, access, or security" },
+        ],
+      }),
+      q("severity", "score", "How urgent is `ticket`?", {
+        levels: ["Low", "Normal", "High", "Critical"],
+      }),
+      q("refund_requested", "noul", "Does `ticket.messages[0].text` request a refund?"),
+      q("duplicate_charge", "noul", "Do `order.charges` show two captured charges for the same amount?"),
+    ];
+  },
+  multi_label() {
+    runtime.stateMode = "text";
+    $("stateInput").value = SAMPLE_STATES.ticket;
+    runtime.questions = [
+      q("billing", "noul", "Is this about billing or payments?"),
+      q("technical", "noul", "Is this about a bug, outage, or integration problem?"),
+      q("shipping", "noul", "Is this about delivery or shipping?"),
+      q("account", "noul", "Is this about login, security, or account access?"),
+      q("cancellation", "noul", "Is the customer asking to cancel?"),
+    ];
+  },
 };
 
 const EXAMPLE_LABELS = {
   triage: "Example: support triage (choice + score + noul)",
   fanout: "Example: speculative fan-out (5 choices)",
   nouls: "Example: noul checklist",
-  fieldpaths: "Example: JSON state and field paths",
-  box: "Example: box, locate an object (image, Jev 1.14)",
+  fieldpaths: "Example: JSON state and field paths (nouls)",
+  box: "Example: noul + box (image, Jev 1.14)",
+  noul_single: "Example: noul only (yes / no probability)",
+  choice_single: "Example: choice only (pick one)",
+  score_single: "Example: score only (ordered levels)",
+  box_single: "Example: box only (image, Jev 1.14)",
+  noul_choice: "Example: noul + choice",
+  noul_score: "Example: noul + score",
+  choice_score: "Example: choice + score",
+  choice_box: "Example: choice + box (image, Jev 1.14)",
+  score_box: "Example: score + box (image, Jev 1.14)",
+  all_types: "Example: all four types (image, Jev 1.14)",
+  json_instructions: "Example: structured JSON instructions",
+  json_mixed: "Example: JSON field paths (choice + score + noul)",
+  multi_label: "Example: multi-label noul checklist",
 };
+
+const PRESET_GROUPS = [
+  {
+    label: "Single types",
+    keys: ["noul_single", "choice_single", "score_single", "box_single"],
+  },
+  {
+    label: "Combinations",
+    keys: [
+      "noul_choice",
+      "noul_score",
+      "box",
+      "choice_score",
+      "choice_box",
+      "score_box",
+      "all_types",
+    ],
+  },
+  {
+    label: "Structured data",
+    keys: ["fieldpaths", "json_mixed", "json_instructions"],
+  },
+  {
+    label: "Worked examples",
+    keys: ["triage", "fanout", "nouls", "multi_label"],
+  },
+];
 
 function loadPreset(name) {
   const preset = PRESETS[name];
@@ -1408,18 +1651,20 @@ function loadPreset(name) {
 
 function renderPresetOptions(selected) {
   const saved = loadPresets();
-  const examples = Object.keys(PRESETS)
-    .map((key) => `<option value="${key}">${esc(EXAMPLE_LABELS[key] || key)}</option>`)
-    .join("");
+  const examples = PRESET_GROUPS.map((group) => {
+    const options = group.keys
+      .filter((key) => PRESETS[key])
+      .map((key) => `<option value="${key}">${esc(EXAMPLE_LABELS[key] || key)}</option>`)
+      .join("");
+    return options ? `<optgroup label="${esc(group.label)}">${options}</optgroup>` : "";
+  }).join("");
   const savedOptions = saved.length
     ? `<optgroup label="Saved presets">${saved
         .map((p) => `<option value="saved::${esc(p.name)}">${esc(p.name)}</option>`)
         .join("")}</optgroup>`
     : "";
   $("presetSelect").innerHTML =
-    `<option value="">Load a preset…</option>` +
-    `<optgroup label="Examples">${examples}</optgroup>` +
-    savedOptions;
+    `<option value="">Load a preset…</option>` + examples + savedOptions;
   if (selected) $("presetSelect").value = selected;
   const isSaved = String($("presetSelect").value || "").startsWith("saved::");
   $("deletePresetBtn").disabled = !isSaved;
