@@ -22,7 +22,25 @@ const TARGETS = [
   { file: ".jev-app.pid", label: "app", port: 8080 },
 ];
 
+const IS_WINDOWS = process.platform === "win32";
+
 function isNodeProcess(pid) {
+  if (!IS_WINDOWS) {
+    try {
+      const cmdline = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8");
+      return cmdline.includes("node");
+    } catch {
+      try {
+        const out = execSync(`ps -p ${pid} -o comm=`, {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        });
+        return /node/i.test(out);
+      } catch {
+        return false;
+      }
+    }
+  }
   try {
     const out = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, {
       encoding: "utf8",
@@ -73,11 +91,15 @@ for (const target of TARGETS) {
   }
 
   try {
-    execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
-    console.log(`  ${target.label}: stopped (node.exe pid ${pid}, port ${target.port})`);
+    if (IS_WINDOWS) {
+      execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
+    } else {
+      process.kill(pid, "SIGTERM");
+    }
+    console.log(`  ${target.label}: stopped (node pid ${pid}, port ${target.port})`);
     stopped += 1;
   } catch {
-    console.log(`  ${target.label}: could not stop node.exe pid ${pid}`);
+    console.log(`  ${target.label}: could not stop node pid ${pid}`);
   }
 }
 

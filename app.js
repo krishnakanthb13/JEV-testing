@@ -86,7 +86,9 @@ function fmt(n) {
 }
 
 function pct(n) {
-  return Math.max(0, Math.min(100, Number(n) * 100));
+  const value = Number(n);
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value * 100));
 }
 
 function parseMaybeJson(text) {
@@ -154,8 +156,19 @@ function loadSettings() {
   return { ...DEFAULT_SETTINGS };
 }
 
+function writeStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function saveSettings() {
-  localStorage.setItem(LS.settings, JSON.stringify(settings));
+  if (!writeStorage(LS.settings, settings)) {
+    announce("Browser storage is full; settings could not be saved.");
+  }
   updateKeyBadge();
 }
 
@@ -170,7 +183,9 @@ function loadHistory() {
 }
 
 function saveHistory(items) {
-  localStorage.setItem(LS.history, JSON.stringify(items));
+  if (!writeStorage(LS.history, items)) {
+    announce("Browser storage is full; history could not be saved.");
+  }
   renderHistory();
 }
 
@@ -185,7 +200,7 @@ function loadPresets() {
 }
 
 function savePresets(items) {
-  localStorage.setItem(LS.presets, JSON.stringify(items));
+  return writeStorage(LS.presets, items);
 }
 
 function updateKeyBadge() {
@@ -221,7 +236,8 @@ function estimateCost(model, usage) {
 
 function resolveEndpoint() {
   if (settings.endpointId === "custom") return settings.customEndpoint.trim();
-  return ENDPOINTS[settings.endpointId].url;
+  const endpoint = ENDPOINTS[settings.endpointId];
+  return endpoint ? endpoint.url : "";
 }
 
 function buildHeaders(body) {
@@ -395,6 +411,12 @@ function snapshotRequest() {
   return copy;
 }
 
+function requestForHistory(body) {
+  const copy = JSON.parse(JSON.stringify(body));
+  delete copy.assets;
+  return copy;
+}
+
 function validateForm() {
   clearError("stateError");
   clearError("questionsError");
@@ -446,6 +468,10 @@ function validateForm() {
         showError("questionsError", `Score "${id}" needs at least two levels.`);
         return false;
       }
+    }
+    if (question.type === "box" && !runtime.asset) {
+      showError("questionsError", `Box question "${id}" needs an attached image.`);
+      return false;
     }
   }
 
@@ -519,12 +545,8 @@ function setResponseBusy(busy) {
 }
 
 async function run() {
-  const token = ++runToken;
   clearError("jsonError");
   clearError("responseError");
-  $("responseMeta").innerHTML = "";
-  $("answers").innerHTML = "";
-  $("rawResponse").textContent = "";
 
   let body;
   if (runtime.jsonMode) {
@@ -555,6 +577,18 @@ async function run() {
     return;
   }
 
+  // Only one run may own the response pane. Abort the previous request and
+  // invalidate its token so a late result cannot overwrite this run.
+  const token = ++runToken;
+  if (runtime.abort) runtime.abort.abort();
+  if (runtime.timer) {
+    clearInterval(runtime.timer);
+    runtime.timer = null;
+  }
+  $("responseMeta").innerHTML = "";
+  $("answers").innerHTML = "";
+  $("rawResponse").textContent = "";
+
   const btn = $("runBtn");
   btn.disabled = true;
   btn.textContent = "Running…";
@@ -576,8 +610,10 @@ async function run() {
       body: JSON.stringify(body),
       signal: runtime.abort.signal,
     });
+    if (token !== runToken) return;
     const ms = Math.round(performance.now() - t0);
     const text = await res.text();
+    if (token !== runToken) return;
     let data = null;
     try {
       data = JSON.parse(text);
@@ -592,12 +628,13 @@ async function run() {
       ok: res.ok,
       model: body.model || settings.model,
       endpoint,
-      request: body,
+      request: requestForHistory(body),
       response: data !== null ? data : text,
     });
 
     renderResponse({ res, data, text, ms, body });
   } catch (err) {
+    if (token !== runToken) return;
     const ms = Math.round(performance.now() - t0);
     if (err && err.name === "AbortError") {
       setResponseBusy(false);
@@ -612,6 +649,7 @@ async function run() {
     const onProxy = settings.endpointId.startsWith("proxy_");
     const directKnown = settings.endpointId === "opencode" || settings.endpointId === "typesafe";
     if (!onProxy && directKnown && (await probeProxy())) {
+      if (token !== runToken) return;
       clearInterval(runtime.timer);
       runtime.timer = null;
       switchToProxyEndpoint();
@@ -627,7 +665,7 @@ async function run() {
       ok: false,
       model: body.model || settings.model,
       endpoint,
-      request: body,
+      request: requestForHistory(body),
       error: String(err),
     });
     $("responseMeta").innerHTML = `<span class="meta-chip bad">request failed</span><span class="meta-chip">${ms} ms</span>`;
@@ -722,7 +760,7 @@ async function showRunFailure(message) {
   el.hidden = false;
 }
 
-function renderResponse({ res, data, text, ms, body }) {
+function renderResponse({ res, data, text, ms, body, countSession = true }) {
   setResponseBusy(false);
   const meta = [];
   meta.push(`<span class="meta-chip ${res.ok ? "ok" : "bad"}">HTTP ${res.status}</span>`);
@@ -737,7 +775,7 @@ function renderResponse({ res, data, text, ms, body }) {
     if (cost !== null) {
       meta.push(`<span class="meta-chip">${cost === 0 ? "free" : `est. cost $${cost.toFixed(4)}`}</span>`);
     }
-    if (res.ok) {
+    if (res.ok && countSession) {
       runtime.session.runs += 1;
       runtime.session.input += Number(data.usage.input_tokens || 0);
       runtime.session.output += Number(data.usage.output_tokens || 0);
@@ -831,7 +869,7 @@ function answerHtml(id, answer) {
     return `
       <div class="answer q-type-choice">
         ${answerHead(id, "choice", answer.confidence)}
-        <div>choice: <b>${esc(String(answer.choice))}</b></div>
+        <div>choice: <b>${esc(answer.choice == null ? "(none)" : String(answer.choice))}</b></div>
         ${rows.map(([key, p]) => barRow(key, p, key === answer.choice)).join("")}
       </div>`;
   }
@@ -866,8 +904,8 @@ function answerHtml(id, answer) {
     const b = answer.box || {};
     const left = pct(b.left);
     const top = pct(b.top);
-    const width = pct(Number(b.right) - Number(b.left));
-    const height = pct(Number(b.bottom) - Number(b.top));
+    const width = pct(Math.max(0, Number(b.right) - Number(b.left)));
+    const height = pct(Math.max(0, Number(b.bottom) - Number(b.top)));
     const rect = `<div class="box-rect" style="left:${left}%;top:${top}%;width:${width}%;height:${height}%"></div>`;
     const stage = runtime.asset && runtime.asset.dataUrl
       ? `<div class="box-stage"><img src="${runtime.asset.dataUrl}" alt="The request image with the returned box drawn on it">${rect}</div>`
@@ -891,9 +929,21 @@ function answerHtml(id, answer) {
 /* ---------------- history & comparison ---------------- */
 
 function recordHistory(entry) {
-  const items = loadHistory();
-  items.unshift(entry);
-  saveHistory(items.slice(0, HISTORY_LIMIT));
+  let items = loadHistory();
+  let ts = Date.now();
+  while (items.some((item) => item.ts === ts)) ts += 1;
+  items.unshift({ ...entry, ts });
+  items = items.slice(0, HISTORY_LIMIT);
+
+  let saved = writeStorage(LS.history, items);
+  while (!saved && items.length > 1) {
+    items.pop();
+    saved = writeStorage(LS.history, items);
+  }
+  if (!saved) {
+    announce("Browser storage is full; this run could not be saved to history.");
+  }
+  renderHistory();
 }
 
 function renderHistory() {
@@ -954,6 +1004,7 @@ function historyOpen(ts) {
     text: typeof item.response === "string" ? item.response : "",
     ms: item.ms,
     body: item.request,
+    countSession: false,
   });
 }
 
@@ -966,7 +1017,8 @@ function answerSummary(answer) {
   }
   if (answer.type === "choice") {
     const conf = answer.confidence != null ? ` · conf ${fmt(answer.confidence)}` : "";
-    return { text: String(answer.choice) + conf, num: null };
+    const choice = answer.choice == null ? "(none)" : String(answer.choice);
+    return { text: choice + conf, num: null };
   }
   if (answer.type === "box") {
     const b = answer.box || {};
@@ -1356,7 +1408,10 @@ function savePresetFromForm() {
   const idx = list.findIndex((p) => p.name === name);
   if (idx >= 0) list[idx] = entry;
   else list.push(entry);
-  savePresets(list);
+  if (!savePresets(list)) {
+    setPresetStatus("Could not save the preset: browser storage is full.");
+    return;
+  }
   renderPresetOptions("saved::" + name);
   runtime.selectedPreset = "saved::" + name;
   closeSaveForm();
@@ -1373,7 +1428,10 @@ function deleteSelectedPreset() {
   if (!value.startsWith("saved::")) return;
   const name = value.slice(7);
   if (!confirm(`Delete the preset "${name}" from this browser?`)) return;
-  savePresets(loadPresets().filter((p) => p.name !== name));
+  if (!savePresets(loadPresets().filter((p) => p.name !== name))) {
+    setPresetStatus("Could not delete the preset: browser storage is full.");
+    return;
+  }
   renderPresetOptions("");
   runtime.selectedPreset = "";
   setPresetStatus(`Deleted "${name}".`);
@@ -1435,7 +1493,10 @@ function importPresets(file) {
         list.push(entry);
       }
     }
-    savePresets(list);
+    if (!savePresets(list)) {
+      setPresetStatus("Import failed: browser storage is full.");
+      return;
+    }
     renderPresetOptions(String($("presetSelect").value || ""));
     setPresetStatus(
       `Imported ${incoming.length} preset${incoming.length === 1 ? "" : "s"}` +
@@ -1448,18 +1509,53 @@ function importPresets(file) {
 
 /* ---------------- image assets ---------------- */
 
+const IMAGE_MAX_BYTES = 16 * 1024 * 1024;
+const IMAGE_MIN_SIDE = 280;
+const IMAGE_MAX_SIDE = 1568;
+
 function attachImage(file) {
   if (!file) return;
   const format = file.type === "image/png" ? "png" : "jpg";
+  const resetInput = () => {
+    $("imageInput").value = "";
+  };
   if (!["image/png", "image/jpeg"].includes(file.type)) {
     showError("stateError", "Images must be PNG or JPEG. Convert the file and try again.");
+    resetInput();
+    return;
+  }
+  if (file.size > IMAGE_MAX_BYTES) {
+    showError("stateError", "Image is larger than 16 MiB. Resize or compress it and try again.");
+    resetInput();
     return;
   }
   const reader = new FileReader();
+  reader.onerror = () => {
+    showError("stateError", "Could not read the image file. Try another PNG or JPEG.");
+    resetInput();
+  };
   reader.onload = () => {
     const dataUrl = String(reader.result);
     const probe = new Image();
+    probe.onerror = () => {
+      showError("stateError", "Could not decode the image. Try another PNG or JPEG.");
+      resetInput();
+    };
     probe.onload = () => {
+      if (
+        probe.width < IMAGE_MIN_SIDE ||
+        probe.height < IMAGE_MIN_SIDE ||
+        probe.width > IMAGE_MAX_SIDE ||
+        probe.height > IMAGE_MAX_SIDE
+      ) {
+        showError(
+          "stateError",
+          `Each image side must be between ${IMAGE_MIN_SIDE} and ${IMAGE_MAX_SIDE} px. ` +
+            `This image is ${probe.width}x${probe.height}.`
+        );
+        resetInput();
+        return;
+      }
       runtime.asset = {
         ref: ASSET_REF,
         format,
@@ -1495,6 +1591,7 @@ function removeAsset() {
   $("assetChip").hidden = true;
   $("assetThumb").removeAttribute("src");
   $("imageInput").value = "";
+  updateModelNote();
 }
 
 /* ---------------- tabs ---------------- */
@@ -1540,7 +1637,9 @@ async function fetchModels() {
   $("modelsPanel").hidden = false;
   $("modelsOut").textContent = "Loading…";
   try {
-    const res = await fetch(url);
+    const headers = {};
+    if (settings.apiKey.trim()) headers.Authorization = `Bearer ${settings.apiKey.trim()}`;
+    const res = await fetch(url, { headers });
     const text = await res.text();
     let pretty = text;
     try {
@@ -1873,6 +1972,16 @@ function bindEvents() {
 /* ---------------- init ---------------- */
 
 function applySettingsToForm() {
+  let changed = false;
+  if (settings.endpointId !== "custom" && !ENDPOINTS[settings.endpointId]) {
+    settings.endpointId = DEFAULT_SETTINGS.endpointId;
+    settings.model = DEFAULT_SETTINGS.model;
+    changed = true;
+  }
+  if (!["auto", "always", "never"].includes(settings.imagesHeader)) {
+    settings.imagesHeader = DEFAULT_SETTINGS.imagesHeader;
+    changed = true;
+  }
   $("endpointSelect").value = settings.endpointId;
   $("customEndpointInput").value = settings.customEndpoint;
   $("customEndpointRow").hidden = settings.endpointId !== "custom";
@@ -1881,6 +1990,7 @@ function applySettingsToForm() {
   $("imagesHeaderSelect").value = settings.imagesHeader;
   $("fetchModelsBtn").hidden = !(ENDPOINTS[settings.endpointId] && ENDPOINTS[settings.endpointId].models);
   $("keyStatus").textContent = settings.apiKey ? "Saved to localStorage." : "";
+  if (changed) saveSettings();
 }
 
 function updateStateModeUI() {

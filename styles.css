@@ -1263,6 +1263,15 @@ details summary:hover {
 
 /* ---------- access & touch ---------- */
 
+.noscript {
+  margin: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

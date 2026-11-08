@@ -43,9 +43,17 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  const pathname = decodeURIComponent(new URL(req.url, `http://127.0.0.1:${PORT}`).pathname);
-  const relative = pathname === "/" ? "/index.html" : pathname;
-  const filePath = path.resolve(ROOT, "." + relative);
+  let filePath;
+  try {
+    const pathname = decodeURIComponent(
+      new URL(req.url, `http://127.0.0.1:${PORT}`).pathname
+    );
+    const relative = pathname === "/" ? "/index.html" : pathname;
+    filePath = path.resolve(ROOT, "." + relative);
+  } catch {
+    send(res, 400, "Bad request");
+    return;
+  }
 
   // Refuse anything that escapes the app directory.
   if (filePath !== ROOT && !filePath.startsWith(ROOT + path.sep)) {
@@ -70,6 +78,21 @@ const server = http.createServer((req, res) => {
   });
 });
 
+server.on("error", (err) => {
+  if (err && err.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} is already in use. Stop the other process or set PORT.`);
+  } else {
+    console.error("Server error:", err);
+  }
+  process.exitCode = 1;
+});
+
+server.on("clientError", (err, socket) => {
+  if (socket && socket.writable) {
+    socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+  }
+});
+
 server.listen(PORT, "127.0.0.1", () => {
   try {
     fs.writeFileSync(PID_FILE, String(process.pid));
@@ -89,6 +112,16 @@ function cleanupPidFile() {
   }
 }
 
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+  cleanupPidFile();
+  process.exit(1);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled rejection:", err);
+  cleanupPidFile();
+  process.exit(1);
+});
 process.on("SIGINT", () => {
   cleanupPidFile();
   process.exit(0);

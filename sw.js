@@ -1,4 +1,4 @@
-const CACHE = "jev-console-v4";
+const CACHE = "jev-console-v5";
 
 const ASSETS = [
   "./",
@@ -11,6 +11,25 @@ const ASSETS = [
   "./icons/maskable-512.png",
   "./icons/apple-touch-icon.png",
 ];
+
+function offlineResponse() {
+  return new Response("Offline", {
+    status: 503,
+    statusText: "Service Unavailable",
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
+
+function cacheResponse(request, response) {
+  if (!response || !response.ok) return;
+  const copy = response.clone();
+  caches
+    .open(CACHE)
+    .then((cache) => cache.put(request, copy))
+    .catch(() => {
+      /* a failed cache write must not break the response */
+    });
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -41,11 +60,12 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put("./index.html", copy));
+          cacheResponse("./index.html", response);
           return response;
         })
-        .catch(() => caches.match("./index.html"))
+        .catch(() =>
+          caches.match("./index.html").then((shell) => shell || offlineResponse())
+        )
     );
     return;
   }
@@ -56,11 +76,10 @@ self.addEventListener("fetch", (event) => {
     caches.match(request).then((cached) => {
       const network = fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
+          cacheResponse(request, response);
           return response;
         })
-        .catch(() => cached);
+        .catch(() => cached || offlineResponse());
       return cached || network;
     })
   );

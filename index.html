@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src http: https: ws: wss:; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
+  >
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Jev Test Console</title>
   <meta name="description" content="Test harness for Jev, TypeSafe's System One model: noul, choice, score, and box questions against a state.">
@@ -15,12 +19,15 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <noscript>
+    <p class="noscript">Jev Test Console needs JavaScript to build requests and render answers. Enable JavaScript and reload the page.</p>
+  </noscript>
   <header class="topbar">
     <div class="brand">
       <span class="logo" aria-hidden="true">J</span>
       <h1>Jev Test Console</h1>
     </div>
-    <div class="tabs" role="tablist" aria-label="Console sections">
+    <div class="tabs" role="tablist" aria-label="Console sections" aria-orientation="horizontal">
       <button class="tab active" id="tabBtn-playground" data-tab="playground" role="tab" aria-selected="true" aria-controls="tab-playground" data-tip="Build a request and run it against Jev.">Playground</button>
       <button class="tab" id="tabBtn-history" data-tab="history" role="tab" aria-selected="false" aria-controls="tab-history" tabindex="-1" data-tip="Recorded runs, with side-by-side comparison.">History <span id="historyCount" class="pill" hidden></span></button>
       <button class="tab" id="tabBtn-settings" data-tab="settings" role="tab" aria-selected="false" aria-controls="tab-settings" tabindex="-1" data-tip="API key, request options, and stored data.">Settings</button>
@@ -191,7 +198,7 @@
         <h2>API access</h2>
         <label>API key
           <div class="row">
-            <input id="apiKeyInput" type="password" placeholder="OpenCode Console or TypeSafe API key" autocomplete="off" spellcheck="false">
+            <input id="apiKeyInput" type="password" placeholder="OpenCode Console or TypeSafe API key" autocomplete="new-password" spellcheck="false">
             <button id="toggleKeyBtn" class="ghost" data-tip="Show or hide the API key.">Show</button>
           </div>
         </label>
@@ -228,7 +235,7 @@
     </section>
   </main>
 
-  <div id="liveRegion" role="status" class="sr-only"></div>
+  <div id="liveRegion" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
   <script src="app.js"></script>
 </body>
 </html>
